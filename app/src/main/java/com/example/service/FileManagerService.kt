@@ -15,6 +15,10 @@ class FileManagerService(private val context: Context) {
     if (!dir.exists()) {
       dir.mkdirs()
     }
+    val indexFile = File(dir, "index.html")
+    if (!indexFile.exists() || indexFile.length() == 0L) {
+      indexFile.writeText(DefaultSite.HTML)
+    }
     dir
   }
 
@@ -24,6 +28,23 @@ class FileManagerService(private val context: Context) {
       dir.mkdirs()
     }
     dir
+  }
+
+  fun ensureDefaultSite() {
+    val indexFile = File(webRootDir, "index.html")
+    if (!indexFile.exists() || indexFile.length() == 0L) {
+      indexFile.writeText(DefaultSite.HTML)
+    }
+  }
+
+  fun resetDefaultSite(): Boolean {
+    return try {
+      val indexFile = File(webRootDir, "index.html")
+      indexFile.writeText(DefaultSite.HTML)
+      true
+    } catch (_: Exception) {
+      false
+    }
   }
 
   fun listFiles(dir: File = webRootDir): List<WebFile> {
@@ -83,6 +104,41 @@ class FileManagerService(private val context: Context) {
       true
     } catch (_: Exception) {
       false
+    }
+  }
+
+  fun renameTarget(target: File, newName: String): File? {
+    return try {
+      val parent = target.parentFile ?: return null
+      val dest = File(parent, newName)
+      if (dest.exists()) return null
+      if (target.renameTo(dest)) dest else null
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  fun duplicateTarget(target: File): File? {
+    return try {
+      val parent = target.parentFile ?: return null
+      val baseName = target.nameWithoutExtension
+      val ext = if (target.extension.isNotEmpty()) ".${target.extension}" else ""
+      var newName = "${baseName}_salinan$ext"
+      var counter = 1
+      var dest = File(parent, newName)
+      while (dest.exists()) {
+        counter++
+        newName = "${baseName}_salinan$counter$ext"
+        dest = File(parent, newName)
+      }
+      if (target.isDirectory) {
+        target.copyRecursively(dest, overwrite = false)
+      } else {
+        target.copyTo(dest, overwrite = false)
+      }
+      dest
+    } catch (_: Exception) {
+      null
     }
   }
 

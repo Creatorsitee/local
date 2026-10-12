@@ -115,9 +115,9 @@ fun AccessLogsScreen(
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
         modifier = Modifier.testTag("clear_logs_button")
       ) {
-        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+        Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(4.dp))
-        Text("Bersihkan", fontSize = 12.sp)
+        Text("Bersihkan", color = PureWhite, fontSize = 12.sp)
       }
     }
 

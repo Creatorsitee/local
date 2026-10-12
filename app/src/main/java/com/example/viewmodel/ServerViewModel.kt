@@ -51,8 +51,13 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
   private val _currentFiles = MutableStateFlow<List<WebFile>>(emptyList())
   val currentFiles: StateFlow<List<WebFile>> = _currentFiles.asStateFlow()
 
+  private val _openFiles = MutableStateFlow<List<File>>(emptyList())
+  val openFiles: StateFlow<List<File>> = _openFiles.asStateFlow()
+
   private val _selectedFile = MutableStateFlow<File?>(null)
   val selectedFile: StateFlow<File?> = _selectedFile.asStateFlow()
+
+  private val fileBuffers = mutableMapOf<String, String>()
 
   private val _fileContent = MutableStateFlow("")
   val fileContent: StateFlow<String> = _fileContent.asStateFlow()
@@ -76,9 +81,18 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
   val showPreview: StateFlow<Boolean> = _showPreview.asStateFlow()
 
   init {
+    fileManagerService.ensureDefaultSite()
     refreshFiles()
     startServer(8080)
     startUptimeTicker()
+  }
+
+  fun resetDefaultSite() {
+    val success = fileManagerService.resetDefaultSite()
+    if (success) {
+      refreshFiles()
+      _toastMessage.value = "Website dibuat ulang dengan tema hitam putih"
+    }
   }
 
   private fun startUptimeTicker() {
@@ -203,23 +217,80 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
 
   fun loadFile(file: File) {
     if (file.isDirectory) return
-    viewModelScope.launch(Dispatchers.IO) {
-      val content = fileManagerService.readFile(file)
-      withContext(Dispatchers.Main) {
-        _selectedFile.value = file
-        _fileContent.value = content
+    val existsInTabs = _openFiles.value.any { it.absolutePath == file.absolutePath }
+    if (!existsInTabs) {
+      _openFiles.value = _openFiles.value + file
+    }
+    _selectedFile.value?.let { current ->
+      fileBuffers[current.absolutePath] = _fileContent.value
+    }
+    if (fileBuffers.containsKey(file.absolutePath)) {
+      _selectedFile.value = file
+      _fileContent.value = fileBuffers[file.absolutePath] ?: ""
+    } else {
+      viewModelScope.launch(Dispatchers.IO) {
+        val content = fileManagerService.readFile(file)
+        withContext(Dispatchers.Main) {
+          fileBuffers[file.absolutePath] = content
+          _selectedFile.value = file
+          _fileContent.value = content
+        }
+      }
+    }
+  }
+
+  fun selectTab(file: File) {
+    if (_selectedFile.value?.absolutePath == file.absolutePath) return
+    _selectedFile.value?.let { current ->
+      fileBuffers[current.absolutePath] = _fileContent.value
+    }
+    _selectedFile.value = file
+    if (fileBuffers.containsKey(file.absolutePath)) {
+      _fileContent.value = fileBuffers[file.absolutePath] ?: ""
+    } else {
+      viewModelScope.launch(Dispatchers.IO) {
+        val content = fileManagerService.readFile(file)
+        withContext(Dispatchers.Main) {
+          fileBuffers[file.absolutePath] = content
+          _fileContent.value = content
+        }
+      }
+    }
+  }
+
+  fun closeTab(file: File) {
+    _selectedFile.value?.let { current ->
+      fileBuffers[current.absolutePath] = _fileContent.value
+    }
+    val updatedTabs = _openFiles.value.filter { it.absolutePath != file.absolutePath }
+    fileBuffers.remove(file.absolutePath)
+    _openFiles.value = updatedTabs
+    if (_selectedFile.value?.absolutePath == file.absolutePath) {
+      if (updatedTabs.isNotEmpty()) {
+        val nextFile = updatedTabs.last()
+        _selectedFile.value = nextFile
+        _fileContent.value = fileBuffers[nextFile.absolutePath] ?: fileManagerService.readFile(nextFile)
+      } else {
+        _selectedFile.value = null
+        _fileContent.value = ""
+        refreshFiles()
       }
     }
   }
 
   fun closeEditor() {
     _selectedFile.value = null
+    _openFiles.value = emptyList()
     _fileContent.value = ""
+    fileBuffers.clear()
     refreshFiles()
   }
 
   fun updateFileContent(content: String) {
     _fileContent.value = content
+    _selectedFile.value?.let {
+      fileBuffers[it.absolutePath] = content
+    }
   }
 
   fun saveCurrentFile() {
@@ -230,12 +301,58 @@ class ServerViewModel(application: Application) : AndroidViewModel(application) 
       withContext(Dispatchers.Main) {
         _isSaving.value = false
         if (success) {
+          fileBuffers[file.absolutePath] = _fileContent.value
           _toastMessage.value = "Berkas tersimpan"
           refreshFiles()
         } else {
           _toastMessage.value = "Gagal menyimpan berkas"
         }
       }
+    }
+  }
+
+  fun renameCurrentFile(newName: String) {
+    val current = _selectedFile.value ?: return
+    val clean = newName.trim()
+    if (clean.isEmpty() || clean == current.name) return
+    val renamed = fileManagerService.renameTarget(current, clean)
+    if (renamed != null) {
+      val currentContent = _fileContent.value
+      fileBuffers[renamed.absolutePath] = currentContent
+      fileBuffers.remove(current.absolutePath)
+      _openFiles.value = _openFiles.value.map {
+        if (it.absolutePath == current.absolutePath) renamed else it
+      }
+      _selectedFile.value = renamed
+      refreshFiles()
+      _toastMessage.value = "Nama berkas diubah: $clean"
+    } else {
+      _toastMessage.value = "Gagal mengubah nama berkas"
+    }
+  }
+
+  fun duplicateCurrentFile() {
+    val current = _selectedFile.value ?: return
+    saveCurrentFile()
+    val copy = fileManagerService.duplicateTarget(current)
+    if (copy != null) {
+      refreshFiles()
+      loadFile(copy)
+      _toastMessage.value = "Salinan ${copy.name} dibuat"
+    } else {
+      _toastMessage.value = "Gagal menduplikasi berkas"
+    }
+  }
+
+  fun deleteCurrentFile() {
+    val current = _selectedFile.value ?: return
+    val success = fileManagerService.deleteTarget(current)
+    if (success) {
+      closeTab(current)
+      refreshFiles()
+      _toastMessage.value = "${current.name} dihapus"
+    } else {
+      _toastMessage.value = "Gagal menghapus berkas"
     }
   }
 

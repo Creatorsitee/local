@@ -162,11 +162,13 @@ fun DashboardScreen(
           Icon(
             imageVector = if (status.isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
             contentDescription = null,
+            tint = if (status.isRunning) PureWhite else PureBlack,
             modifier = Modifier.size(20.dp)
           )
           Spacer(modifier = Modifier.width(8.dp))
           Text(
             text = if (status.isRunning) "Hentikan Server" else "Mulai Server",
+            color = if (status.isRunning) PureWhite else PureBlack,
             fontWeight = FontWeight.Bold,
             fontSize = 15.sp
           )
@@ -211,7 +213,7 @@ fun DashboardScreen(
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.height(56.dp)
           ) {
-            Text("Simpan Port", fontSize = 13.sp)
+            Text("Simpan Port", color = PureWhite, fontSize = 13.sp)
           }
         }
       }
@@ -322,9 +324,9 @@ fun DashboardScreen(
           .height(48.dp)
           .testTag("preview_tab_button")
       ) {
-        Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.Visibility, contentDescription = null, tint = PureBlack, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text("Pratinjau", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text("Pratinjau", color = PureBlack, fontWeight = FontWeight.Bold, fontSize = 13.sp)
       }
 
       OutlinedButton(
@@ -340,9 +342,9 @@ fun DashboardScreen(
           .height(48.dp)
           .testTag("open_external_browser_button")
       ) {
-        Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = PureWhite, modifier = Modifier.size(18.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text("Buka di Browser", fontSize = 13.sp)
+        Text("Buka di Browser", color = PureWhite, fontSize = 13.sp)
       }
     }
 

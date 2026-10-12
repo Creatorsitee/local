@@ -2,6 +2,7 @@ package com.example.server
 
 import android.util.Base64
 import com.example.model.AccessLog
+import com.example.service.DefaultSite
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -391,32 +392,81 @@ class FullstackServer(
       "/"
     }
 
-    var targetPath = cleanPath.trimStart('/')
-    if (targetPath.isEmpty()) targetPath = "index.html"
+    val rawTarget = cleanPath.trimStart('/')
+    var targetFile: File = File(wwwDir, "index.html")
 
-    var targetFile = File(wwwDir, targetPath)
-    if (targetFile.isDirectory) {
-      val indexFile = File(targetFile, "index.html")
-      if (indexFile.exists()) targetFile = indexFile
+    if (rawTarget.isEmpty()) {
+      val candidates = listOf("index.html", "index.htm", "main.html", "app.html", "home.html", "game.html")
+      var found: File? = null
+      for (candidate in candidates) {
+        val f = File(wwwDir, candidate)
+        if (f.exists() && f.isFile) {
+          found = f
+          break
+        }
+      }
+      if (found == null) {
+        val defaultFile = File(wwwDir, "index.html")
+        try {
+          if (!defaultFile.exists() || defaultFile.length() == 0L) {
+            defaultFile.writeText(DefaultSite.HTML)
+          }
+          found = defaultFile
+        } catch (_: Exception) {}
+      }
+      targetFile = found ?: File(wwwDir, "index.html")
+    } else {
+      var candidate = File(wwwDir, rawTarget)
+      if (candidate.isDirectory) {
+        val indexFile = File(candidate, "index.html")
+        if (indexFile.exists()) candidate = indexFile
+      }
+      if (!candidate.exists() || !candidate.isFile) {
+        val withHtml = File(wwwDir, "$rawTarget.html")
+        if (withHtml.exists() && withHtml.isFile) {
+          candidate = withHtml
+        }
+      }
+      targetFile = candidate
+    }
+
+    if (!targetFile.exists() || !targetFile.isFile) {
+      if (rawTarget.isEmpty() || rawTarget == "index.html") {
+        try {
+          val fallback = File(wwwDir, "index.html")
+          fallback.writeText(DefaultSite.HTML)
+          targetFile = fallback
+        } catch (_: Exception) {}
+      }
     }
 
     if (!targetFile.exists() || !targetFile.isFile) {
       val availableFiles = wwwDir.listFiles() ?: emptyArray()
+      val anyHtml = availableFiles.filter { it.isFile && (it.extension.equals("html", ignoreCase = true) || it.extension.equals("htm", ignoreCase = true)) }
+      if (anyHtml.isNotEmpty()) {
+        val redirectPath = "/" + anyHtml[0].name
+        val redirectHeader = "HTTP/1.1 302 Found\r\nLocation: $redirectPath\r\nContent-Length: 0\r\n\r\n"
+        output.write(redirectHeader.toByteArray(StandardCharsets.UTF_8))
+        val duration = System.currentTimeMillis() - requestStartTime
+        emitLog(method, path, 302, 0, duration, clientIp, userAgent, "text/html")
+        return
+      }
+
       val responseHtml = if (availableFiles.isEmpty()) {
-        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LocalHost Server</title>" +
-          "<style>body{background:#000;color:#fff;font-family:monospace;padding:32px;}h1{font-size:18px;}p{color:#888;font-size:13px;}</style></head>" +
-          "<body><h1>Server Aktif</h1><p>Direktori web kosong. Tambahkan berkas Anda melalui aplikasi.</p></body></html>"
+        "<!DOCTYPE html><html lang='id'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>LocalHost Server</title>" +
+          "<style>body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:32px;margin:0;}h1{font-size:20px;letter-spacing:-0.5px;}p{color:#888;font-size:14px;line-height:1.6;}</style></head>" +
+          "<body><h1>Server Aktif</h1><p>Direktori web kosong. Tambahkan berkas web melalui aplikasi.</p></body></html>"
       } else {
         val listItems = availableFiles.joinToString("") {
-          "<li><a href='/${it.name}' style='color:#fff;'>${it.name}</a></li>"
+          "<li style='margin-bottom:8px;'><a href='/${it.name}' style='color:#fff;font-size:14px;font-family:monospace;text-decoration:none;'>${it.name}</a></li>"
         }
-        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>LocalHost Index</title>" +
-          "<style>body{background:#000;color:#fff;font-family:monospace;padding:32px;}ul{line-height:2;}a{text-decoration:none;}</style></head>" +
-          "<body><h1>Direktori Berkas:</h1><ul>$listItems</ul></body></html>"
+        "<!DOCTYPE html><html lang='id'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1.0'><title>LocalHost Berkas</title>" +
+          "<style>body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:32px;margin:0;}h1{font-size:20px;margin-bottom:20px;}ul{list-style:none;padding:0;}a:hover{text-decoration:underline;}</style></head>" +
+          "<body><h1>Daftar Berkas Tersedia</h1><ul>$listItems</ul></body></html>"
       }
 
       val bytes = responseHtml.toByteArray(StandardCharsets.UTF_8)
-      val statusCode = if (targetPath == "index.html") 200 else 404
+      val statusCode = if (rawTarget.isEmpty() || rawTarget == "index.html") 200 else 404
       val statusText = if (statusCode == 200) "OK" else "Not Found"
       sendHttpResponse(output, statusCode, statusText, "text/html; charset=utf-8", bytes)
       val duration = System.currentTimeMillis() - requestStartTime

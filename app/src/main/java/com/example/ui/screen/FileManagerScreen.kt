@@ -31,14 +31,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -89,6 +94,7 @@ fun FileManagerScreen(
   val context = LocalContext.current
   val currentDir by viewModel.currentDirectory.collectAsState()
   val files by viewModel.currentFiles.collectAsState()
+  val openFiles by viewModel.openFiles.collectAsState()
   val selectedFile by viewModel.selectedFile.collectAsState()
   val fileContent by viewModel.fileContent.collectAsState()
   val isSaving by viewModel.isSaving.collectAsState()
@@ -100,6 +106,11 @@ fun FileManagerScreen(
   var showGitCloneDialog by remember { mutableStateOf(false) }
   var fileToDelete by remember { mutableStateOf<File?>(null) }
   var isLineWrapEnabled by remember { mutableStateOf(false) }
+
+  var showRenameDialog by remember { mutableStateOf(false) }
+  var renameInput by remember { mutableStateOf("") }
+  var showQuickOpenFilePicker by remember { mutableStateOf(false) }
+  var showDeleteCurrentFileDialog by remember { mutableStateOf(false) }
 
   var inputNewFileName by remember { mutableStateOf("") }
   var inputNewFolderName by remember { mutableStateOf("") }
@@ -150,70 +161,146 @@ fun FileManagerScreen(
       verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
       Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(DarkCard, RoundedCornerShape(8.dp))
+          .border(1.dp, DarkBorder, RoundedCornerShape(8.dp))
+          .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
+        IconButton(
+          onClick = { viewModel.closeEditor() },
+          modifier = Modifier.size(32.dp)
+        ) {
+          Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Tutup Tab", tint = PureWhite, modifier = Modifier.size(18.dp))
+        }
+
         Row(
-          modifier = Modifier.weight(1f),
+          modifier = Modifier
+            .weight(1f)
+            .horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          IconButton(
-            onClick = { viewModel.closeEditor() },
-            modifier = Modifier.size(36.dp)
-          ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = PureWhite)
-          }
-          Spacer(modifier = Modifier.width(6.dp))
-          Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+          openFiles.forEach { file ->
+            val isCurrent = file.absolutePath == selectedFile?.absolutePath
+            Row(
+              modifier = Modifier
+                .background(
+                  if (isCurrent) PureWhite else DarkSurface,
+                  RoundedCornerShape(6.dp)
+                )
+                .border(
+                  1.dp,
+                  if (isCurrent) PureWhite else Color(0xFF282828),
+                  RoundedCornerShape(6.dp)
+                )
+                .clickable { viewModel.selectTab(file) }
+                .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
               Text(
-                text = selectedFile?.name ?: "",
-                style = MaterialTheme.typography.titleMedium,
-                color = PureWhite,
-                fontWeight = FontWeight.Bold,
+                text = file.name,
+                color = if (isCurrent) PureBlack else Color(0xFFCCCCCC),
+                fontSize = 12.sp,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1
               )
-              Spacer(modifier = Modifier.width(8.dp))
-              Box(
-                modifier = Modifier
-                  .background(Color(0xFF222222), RoundedCornerShape(4.dp))
-                  .padding(horizontal = 6.dp, vertical = 2.dp)
+              IconButton(
+                onClick = { viewModel.closeTab(file) },
+                modifier = Modifier.size(24.dp)
               ) {
-                Text(
-                  text = fileExtension.uppercase(Locale.ROOT),
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = PureWhite
+                Icon(
+                  imageVector = Icons.Default.Close,
+                  contentDescription = "Tutup Tab",
+                  tint = if (isCurrent) PureBlack else Color(0xFF888888),
+                  modifier = Modifier.size(14.dp)
                 )
               }
             }
-            Text(
-              text = "$linesCount baris | $charCount karakter",
-              style = MaterialTheme.typography.bodySmall,
-              color = Color(0xFF888888),
-              fontFamily = FontFamily.Monospace,
-              fontSize = 11.sp
-            )
           }
+        }
+
+        IconButton(
+          onClick = { showQuickOpenFilePicker = true },
+          modifier = Modifier.size(32.dp)
+        ) {
+          Icon(Icons.Default.Add, contentDescription = "Buka Berkas Lain", tint = PureWhite, modifier = Modifier.size(18.dp))
+        }
+      }
+
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .background(DarkCard, RoundedCornerShape(8.dp))
+          .border(1.dp, DarkBorder, RoundedCornerShape(8.dp))
+          .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = selectedFile?.name ?: "",
+            color = PureWhite,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+          )
+          Text(
+            text = "$linesCount baris | $charCount kar",
+            color = Color(0xFF888888),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp
+          )
         }
 
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+          IconButton(
+            onClick = {
+              renameInput = selectedFile?.name ?: ""
+              showRenameDialog = true
+            },
+            modifier = Modifier.size(32.dp)
+          ) {
+            Icon(Icons.Default.Edit, contentDescription = "Ubah Nama", tint = PureWhite, modifier = Modifier.size(16.dp))
+          }
+
+          IconButton(
+            onClick = { viewModel.duplicateCurrentFile() },
+            modifier = Modifier.size(32.dp)
+          ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Duplikasi", tint = PureWhite, modifier = Modifier.size(16.dp))
+          }
+
+          IconButton(
+            onClick = { showDeleteCurrentFileDialog = true },
+            modifier = Modifier.size(32.dp)
+          ) {
+            Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFFF6666), modifier = Modifier.size(16.dp))
+          }
+
           IconButton(
             onClick = { isLineWrapEnabled = !isLineWrapEnabled },
             modifier = Modifier
-              .size(36.dp)
-              .background(if (isLineWrapEnabled) Color(0xFF2A2A2A) else Color.Transparent, RoundedCornerShape(6.dp))
+              .size(32.dp)
+              .background(if (isLineWrapEnabled) Color(0xFF2A2A2A) else Color.Transparent, RoundedCornerShape(4.dp))
           ) {
             Icon(
               imageVector = Icons.AutoMirrored.Filled.FormatAlignLeft,
-              contentDescription = "Wrap Teks",
+              contentDescription = "Bungkus Teks",
               tint = if (isLineWrapEnabled) PureWhite else Color(0xFF888888),
-              modifier = Modifier.size(18.dp)
+              modifier = Modifier.size(16.dp)
             )
+          }
+
+          IconButton(
+            onClick = { viewModel.setShowPreview(true) },
+            modifier = Modifier.size(32.dp)
+          ) {
+            Icon(Icons.Default.Visibility, contentDescription = "Pratinjau", tint = PureWhite, modifier = Modifier.size(16.dp))
           }
 
           Button(
@@ -221,15 +308,15 @@ fun FileManagerScreen(
             enabled = !isSaving,
             colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
             shape = RoundedCornerShape(6.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-            modifier = Modifier.testTag("save_file_button")
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.height(32.dp).testTag("save_file_button")
           ) {
             if (isSaving) {
-              CircularProgressIndicator(color = PureBlack, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+              CircularProgressIndicator(color = PureBlack, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
             } else {
-              Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Simpan", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+              Icon(Icons.Default.Save, contentDescription = null, tint = PureBlack, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Simpan", color = PureBlack, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
           }
         }
@@ -244,6 +331,22 @@ fun FileManagerScreen(
           .padding(horizontal = 6.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
       ) {
+        Box(
+          modifier = Modifier
+            .background(PureWhite, RoundedCornerShape(4.dp))
+            .clickable { viewModel.updateFileContent(fileContent + "  ") }
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = "TAB",
+            color = PureBlack,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+          )
+        }
+
         symbols.forEach { sym ->
           Box(
             modifier = Modifier
@@ -411,9 +514,9 @@ fun FileManagerScreen(
           contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
           modifier = Modifier.weight(1f)
         ) {
-          Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+          Icon(Icons.AutoMirrored.Filled.NoteAdd, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("+ File", fontSize = 12.sp)
+          Text("+ File", color = PureWhite, fontSize = 12.sp)
         }
 
         OutlinedButton(
@@ -427,9 +530,9 @@ fun FileManagerScreen(
           contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
           modifier = Modifier.weight(1f)
         ) {
-          Icon(Icons.Default.CreateNewFolder, contentDescription = null, modifier = Modifier.size(16.dp))
+          Icon(Icons.Default.CreateNewFolder, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("+ Folder", fontSize = 12.sp)
+          Text("+ Folder", color = PureWhite, fontSize = 12.sp)
         }
 
         OutlinedButton(
@@ -440,9 +543,9 @@ fun FileManagerScreen(
           contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
           modifier = Modifier.weight(1f)
         ) {
-          Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+          Icon(Icons.Default.FileDownload, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("Impor", fontSize = 12.sp)
+          Text("Impor", color = PureWhite, fontSize = 12.sp)
         }
       }
 
@@ -457,9 +560,9 @@ fun FileManagerScreen(
           contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
           modifier = Modifier.weight(1f)
         ) {
-          Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+          Icon(Icons.Default.CloudDownload, contentDescription = null, tint = PureBlack, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Git Clone", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          Text("Git Clone", color = PureBlack, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
 
         OutlinedButton(
@@ -471,9 +574,9 @@ fun FileManagerScreen(
           contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
           modifier = Modifier.weight(1f)
         ) {
-          Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+          Icon(Icons.Default.Sync, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Git Pull", fontSize = 12.sp)
+          Text("Git Pull", color = PureWhite, fontSize = 12.sp)
         }
       }
 
@@ -546,7 +649,10 @@ fun FileManagerScreen(
             focusedBorderColor = PureWhite,
             unfocusedBorderColor = DarkBorder,
             focusedTextColor = PureWhite,
-            unfocusedTextColor = PureWhite
+            unfocusedTextColor = PureWhite,
+            focusedContainerColor = DarkSurface,
+            unfocusedContainerColor = DarkSurface,
+            cursorColor = PureWhite
           ),
           modifier = Modifier.fillMaxWidth()
         )
@@ -568,7 +674,9 @@ fun FileManagerScreen(
           Text("Batal", color = Color(0xFF888888))
         }
       },
-      containerColor = DarkSurface
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
     )
   }
 
@@ -586,7 +694,10 @@ fun FileManagerScreen(
             focusedBorderColor = PureWhite,
             unfocusedBorderColor = DarkBorder,
             focusedTextColor = PureWhite,
-            unfocusedTextColor = PureWhite
+            unfocusedTextColor = PureWhite,
+            focusedContainerColor = DarkSurface,
+            unfocusedContainerColor = DarkSurface,
+            cursorColor = PureWhite
           ),
           modifier = Modifier.fillMaxWidth()
         )
@@ -608,7 +719,9 @@ fun FileManagerScreen(
           Text("Batal", color = Color(0xFF888888))
         }
       },
-      containerColor = DarkSurface
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
     )
   }
 
@@ -632,7 +745,10 @@ fun FileManagerScreen(
               focusedBorderColor = PureWhite,
               unfocusedBorderColor = DarkBorder,
               focusedTextColor = PureWhite,
-              unfocusedTextColor = PureWhite
+              unfocusedTextColor = PureWhite,
+              focusedContainerColor = DarkSurface,
+              unfocusedContainerColor = DarkSurface,
+              cursorColor = PureWhite
             ),
             modifier = Modifier.fillMaxWidth()
           )
@@ -655,7 +771,9 @@ fun FileManagerScreen(
           Text("Batal", color = Color(0xFF888888))
         }
       },
-      containerColor = DarkSurface
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
     )
   }
 
@@ -685,7 +803,132 @@ fun FileManagerScreen(
           Text("Batal", color = Color(0xFF888888))
         }
       },
-      containerColor = DarkSurface
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
+    )
+  }
+
+  if (showRenameDialog) {
+    AlertDialog(
+      onDismissRequest = { showRenameDialog = false },
+      title = { Text("Ubah Nama Berkas", color = PureWhite) },
+      text = {
+        OutlinedTextField(
+          value = renameInput,
+          onValueChange = { renameInput = it },
+          label = { Text("Nama Baru", color = Color(0xFF888888)) },
+          singleLine = true,
+          colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = PureWhite,
+            unfocusedBorderColor = DarkBorder,
+            focusedTextColor = PureWhite,
+            unfocusedTextColor = PureWhite,
+            focusedContainerColor = DarkSurface,
+            unfocusedContainerColor = DarkSurface,
+            cursorColor = PureWhite
+          ),
+          modifier = Modifier.fillMaxWidth()
+        )
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            if (renameInput.isNotBlank()) {
+              viewModel.renameCurrentFile(renameInput.trim())
+              showRenameDialog = false
+            }
+          }
+        ) {
+          Text("Simpan", color = PureWhite, fontWeight = FontWeight.Bold)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showRenameDialog = false }) {
+          Text("Batal", color = Color(0xFF888888))
+        }
+      },
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
+    )
+  }
+
+  if (showDeleteCurrentFileDialog) {
+    AlertDialog(
+      onDismissRequest = { showDeleteCurrentFileDialog = false },
+      title = { Text("Hapus Berkas Aktif?", color = PureWhite) },
+      text = {
+        Text(
+          text = "Hapus '${selectedFile?.name}' secara permanen?",
+          color = Color(0xFFCCCCCC),
+          fontSize = 13.sp
+        )
+      },
+      confirmButton = {
+        TextButton(
+          onClick = {
+            viewModel.deleteCurrentFile()
+            showDeleteCurrentFileDialog = false
+          }
+        ) {
+          Text("Hapus", color = Color(0xFFFF5555), fontWeight = FontWeight.Bold)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showDeleteCurrentFileDialog = false }) {
+          Text("Batal", color = Color(0xFF888888))
+        }
+      },
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
+    )
+  }
+
+  if (showQuickOpenFilePicker) {
+    AlertDialog(
+      onDismissRequest = { showQuickOpenFilePicker = false },
+      title = { Text("Buka Berkas di Tab Baru", color = PureWhite) },
+      text = {
+        val nonDirFiles = files.filter { !it.isDirectory }
+        if (nonDirFiles.isEmpty()) {
+          Text("Tidak ada berkas lain di direktori ini.", color = Color(0xFF888888), fontSize = 13.sp)
+        } else {
+          LazyColumn(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(240.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            items(nonDirFiles, key = { it.file.absolutePath }) { f ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .background(DarkSurface, RoundedCornerShape(4.dp))
+                  .clickable {
+                    viewModel.loadFile(f.file)
+                    showQuickOpenFilePicker = false
+                  }
+                  .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(Icons.Default.Description, contentDescription = null, tint = PureWhite, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = f.name, color = PureWhite, fontSize = 13.sp, modifier = Modifier.weight(1f))
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showQuickOpenFilePicker = false }) {
+          Text("Tutup", color = PureWhite, fontWeight = FontWeight.Bold)
+        }
+      },
+      containerColor = DarkSurface,
+      titleContentColor = PureWhite,
+      textContentColor = PureWhite
     )
   }
 }

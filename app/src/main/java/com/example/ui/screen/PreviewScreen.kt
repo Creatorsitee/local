@@ -131,12 +131,13 @@ fun PreviewScreen(
       modifier = Modifier
         .fillMaxWidth()
         .weight(1f)
-        .background(PureWhite, RoundedCornerShape(8.dp))
+        .background(PureBlack, RoundedCornerShape(8.dp))
         .border(1.dp, DarkBorder, RoundedCornerShape(8.dp))
     ) {
       AndroidView(
         factory = { ctx ->
           WebView(ctx).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
             layoutParams = ViewGroup.LayoutParams(
               ViewGroup.LayoutParams.MATCH_PARENT,
               ViewGroup.LayoutParams.MATCH_PARENT
@@ -149,6 +150,9 @@ fun PreviewScreen(
               cacheMode = WebSettings.LOAD_NO_CACHE
               useWideViewPort = true
               loadWithOverviewMode = true
+              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                forceDark = WebSettings.FORCE_DARK_OFF
+              }
             }
             webViewClient = object : WebViewClient() {
               override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {

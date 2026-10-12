@@ -3,7 +3,6 @@ package com.example.util
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
@@ -14,13 +13,13 @@ import java.util.regex.Pattern
 
 object SyntaxHighlighter {
 
+  private val ColorBaseText = Color(0xFFFFFFFF)
   private val ColorKeyword = Color(0xFFFFFFFF)
-  private val ColorString = Color(0xFFE2E2E2)
-  private val ColorNumber = Color(0xFFAAAAAA)
-  private val ColorComment = Color(0xFF666666)
-  private val ColorProperty = Color(0xFFCCCCCC)
+  private val ColorString = Color(0xFFE0E0E0)
+  private val ColorNumber = Color(0xFFB0B0B0)
+  private val ColorComment = Color(0xFF777777)
+  private val ColorProperty = Color(0xFFE0E0E0)
   private val ColorTag = Color(0xFFFFFFFF)
-  private val ColorPunctuation = Color(0xFF888888)
 
   private val PatternJsKeywords = Pattern.compile(
     "\\b(break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|new|return|super|switch|this|throw|try|typeof|var|void|while|with|yield|let|static|async|await|of|from|as|interface|type|enum|implements|package|private|protected|public)\\b"
@@ -69,11 +68,15 @@ object SyntaxHighlighter {
     val ext = extension.lowercase(Locale.ROOT)
     val builder = AnnotatedString.Builder(text)
 
+    builder.addStyle(SpanStyle(color = ColorBaseText), 0, text.length)
+
     fun applyPattern(pattern: Pattern, spanStyle: SpanStyle) {
-      val matcher = pattern.matcher(text)
-      while (matcher.find()) {
-        builder.addStyle(spanStyle, matcher.start(), matcher.end())
-      }
+      try {
+        val matcher = pattern.matcher(text)
+        while (matcher.find()) {
+          builder.addStyle(spanStyle, matcher.start(), matcher.end())
+        }
+      } catch (_: Exception) {}
     }
 
     when (ext) {

@@ -1,6 +1,6 @@
 {
-  "summary":  "Revisi rencana implementasi untuk mendukung hosting website Fullstack secara real-time: Server HTTP mandiri lengkap (GET, POST, PUT, DELETE, PATCH, OPTIONS), WebSocket server & Server-Sent Events (SSE) real-time, REST API & dynamic JSON/SQLite database backend, static asset server, Git clone/pull, file manager & editor kode monokrom, log streaming live, QR code LAN, dan tab pratinjau browser in-app.",
-  "updatedAt":  "2026-10-11T16:17:42.174763904Z",
+  "summary":  "Rencana implementasi pengembangan editor kode dengan dukungan multi-tab untuk membuka beberapa berkas sekaligus, serta fitur manajemen berkas langsung dari editor (ubah nama berkas, duplikasi, simpan, dan hapus).",
+  "updatedAt":  "2026-10-12T11:35:21.183765641Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
